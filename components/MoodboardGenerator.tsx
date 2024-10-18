@@ -6,29 +6,47 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Palette, Type, Download, Share2, Plus, Upload } from 'lucide-react';
 
-export default function MoodboardGenerator() {  // Changed to function declaration
-  const [theme, setTheme] = useState('')
-  const [moodboard, setMoodboard] = useState({
+interface Moodboard {
+  images: string[];
+  colors: string[];
+  fonts: string[];
+}
+
+interface ColorMap {
+  [key: string]: number;
+}
+
+export default function MoodboardGenerator() {
+  const [theme, setTheme] = useState('');
+  const [moodboard, setMoodboard] = useState<Moodboard>({
     images: [],
     colors: [],
     fonts: ['Playfair Display', 'Roboto', 'Open Sans']
-  })
-  const [isDragging, setIsDragging] = useState(false)
+  });
+  const [isDragging, setIsDragging] = useState(false);
+
   // Function to extract dominant colors from an image
-  const extractColors = async (imageUrl: string) => {
+  const extractColors = async (imageUrl: string): Promise<string[]> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'Anonymous';
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          console.error('Could not get 2D context from canvas');
+          resolve([]);
+          return;
+        }
+
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        const colorMap = {};
-        
+        const colorMap: ColorMap = {};
+
         // Sample pixels at regular intervals
         for (let i = 0; i < imageData.length; i += 16) {
           const r = imageData[i];
@@ -43,8 +61,8 @@ export default function MoodboardGenerator() {  // Changed to function declarati
           .sort(([, a], [, b]) => b - a)
           .slice(0, 4)
           .map(([rgb]) => {
-            const [r, g, b] = rgb.split(',');
-            return `#${((1 << 24) + (+r << 16) + (+g << 8) + +b).toString(16).slice(1)}`;
+            const [r, g, b] = rgb.split(',').map(Number);
+            return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
           });
 
         resolve(colors);
@@ -53,28 +71,29 @@ export default function MoodboardGenerator() {  // Changed to function declarati
     });
   };
 
-  const handleFiles = async (files: any) => {
+  const handleFiles = async (files: FileList) => {
     const newImages: string[] = [];
     const newColors = new Set(moodboard.colors);
 
-    for (const file of files) {
+    // Convert FileList to Array
+    const filesArray = Array.from(files);
+
+    for (const file of filesArray) {
       if (file.type.startsWith('image/')) {
         const imageUrl = URL.createObjectURL(file);
         newImages.push(imageUrl);
 
         // Extract colors from the image
         const colors = await extractColors(imageUrl);
-        colors.forEach((color: any) => newColors.add(color));
+        colors.forEach((color) => newColors.add(color));
       }
     }
-
     setMoodboard(prev => ({
       ...prev,
       images: [...prev.images, ...newImages],
-      colors: [...newColors].slice(0, 8) // Limit to 8 colors
+      colors: Array.from(newColors).slice(0, 8) // Convert Set to Array before slicing
     }));
-  };
-
+};
   const handleDrop = useCallback((e: { preventDefault: () => void; dataTransfer: { files: any; }; }) => {
     e.preventDefault();
     setIsDragging(false);
